@@ -1,0 +1,419 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>なんでも展開・因数分解ツール</title>
+<script src="https://cdn.jsdelivr.net/npm/nerdamer@1.1.13/nerdamer.core.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/nerdamer@1.1.13/Algebra.js"></script>
+<script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+
+<style>
+:root{--bg:#f0f2f5;--card:#fff;--primary:#007bff;--primary-hover:#0062cc;--muted:#888;--secondary:#17a2b8;--secondary-hover:#138496}
+*{box-sizing:border-box}
+body{font-family:Inter, "Helvetica Neue", Arial, sans-serif;background:var(--bg);margin:0;padding:24px;display:flex;align-items:flex-start;justify-content:center;min-height:100vh}
+.container{width:100%;max-width:920px}
+.header{display:flex;gap:12px;align-items:center;margin-bottom:18px}
+.title{font-size:20px;color:#222;font-weight:700}
+.card{background:var(--card);padding:20px;border-radius:12px;box-shadow:0 6px 20px rgba(0,0,0,0.08);margin-bottom:18px}
+.row{display:flex;gap:12px;align-items:center;flex-wrap:wrap;}
+.input-group {display:flex;gap:12px;align-items:center;margin-bottom:8px; width: 100%;}
+.input{flex:1;padding:12px;border:1px solid #e6e9ee;border-radius:8px;font-size:16px;font-family:monospace;}
+.input:focus{outline:none;border-color:var(--primary);box-shadow:0 0 0 3px rgba(0,123,255,0.15);}
+.btn{padding:12px 18px;border-radius:8px;border:none;background:var(--primary);color:#fff;font-weight:600;cursor:pointer;transition:background 0.2s; white-space:nowrap;}
+.btn:hover{background:var(--primary-hover);}
+.btn.secondary{background:var(--secondary);}
+.btn.secondary:hover{background:var(--secondary-hover);}
+.btn.ghost{background:#f6f7fb;color:#333;border:1px solid #e6e9ee;}
+.btn.ghost:hover{background:#e2e6ea;}
+.small{font-size:13px;color:var(--muted)}
+.results{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px}
+.result-box{background:#fbfdff;padding:16px;border-radius:8px;border:1px solid #eef3ff}
+.result-box.full-width{grid-column: span 2;}
+.label{font-size:13px;color:#666;font-weight:600;margin-bottom:8px;display:block;}
+.value{font-size:18px;color:var(--primary);font-weight:700;word-break:break-all;}
+.math-display{min-height: 60px; display: flex; align-items: center; justify-content: center; background:#fff; border-radius: 8px; border: 1px dashed #cfe6ff; padding:10px; overflow-x:auto;}
+.flex-between{display:flex;justify-content:space-between;align-items:center}
+.chips{display:flex;gap:8px;flex-wrap:wrap;margin-top:4px}
+.chip{background:#f1f5ff;padding:6px 12px;border-radius:999px;font-size:14px;color:#0b3b8c;font-family:monospace;font-weight:bold;}
+.history-list{display:flex;flex-direction:column;gap:8px;margin-top:10px}
+.history-item{display:flex;justify-content:space-between;align-items:center;padding:12px;border-radius:8px;background:#fbfbfb;border:1px solid #eee;gap:10px}
+.history-expr{font-family:monospace;font-size:15px;color:#333;background:#fff;padding:4px 8px;border-radius:4px;border:1px solid #ddd;}
+.history-badge{font-size:11px;padding:2px 6px;border-radius:4px;color:#fff;font-weight:bold;margin-right:6px;}
+.badge-expand{background:var(--primary);}
+.badge-factor{background:var(--secondary);}
+.copy-btn{background:#e9f2ff;border:1px solid #cfe6ff;color:#0366d6;padding:8px 12px;border-radius:6px;cursor:pointer;font-size:13px;font-weight:600;transition:background 0.2s;}
+.copy-btn:hover{background:#d0e3ff;}
+.footer-note{font-size:13px;color:var(--muted);margin-top:8px}
+.alert{background:#fff4f4;border:1px solid #ffd6d6;color:#8a1f1f;padding:10px;border-radius:8px;margin-top:8px;font-size:14px;}
+.text-result-box{background:#f1f5ff; padding:10px; border-radius:6px; margin-top:12px; display:flex; justify-content:space-between; align-items:center; font-family:monospace; font-size:15px; border:1px solid #dce8ff;}
+@media(max-width:760px){
+  .results{grid-template-columns:1fr}
+  .result-box.full-width{grid-column: span 1;}
+  .input-group {flex-wrap: wrap;}
+  .input {width: 100%; flex:none;}
+  .history-item {flex-direction: column; align-items: flex-start;}
+  .history-item > div:last-child {align-self: flex-end; margin-top: 8px;}
+}
+</style>
+</head>
+<body>
+
+<div class="container">
+  <div class="header">
+    <div class="title">なんでも展開・因数分解ツール</div>
+  </div>
+
+  <div class="card" id="mainCard">
+    <div class="input-group">
+      <input id="inputExpr" class="input" placeholder="例: (x+y)^2 または x^2 + 2x + 1" autocomplete="off">
+      <button id="expandBtn" class="btn">展開する</button>
+      <button id="factorBtn" class="btn secondary">因数分解</button>
+      <button id="clearBtn" class="btn ghost">クリア</button>
+    </div>
+    
+    <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px">
+      <div class="small">ヒント: 乗算記号は省略可能 (例: 2x, (x+1)(x-1))。全角入力も自動変換します。</div>
+    </div>
+
+    <!-- 結果表示エリア -->
+    <div class="results" id="results" style="display:none">
+      
+      <div class="result-box full-width">
+        <div class="label">計算結果 (<span id="actionLabel"></span>)</div>
+        <div id="mathResultDisplay" class="math-display">
+          <!-- MathJax Rendered Result -->
+        </div>
+        
+        <div class="text-result-box">
+          <div id="mathResultPlain" style="overflow-x:auto; padding-right:10px; color:#0b3b8c; font-weight:bold;"></div>
+          <button id="copyResultBtn" class="copy-btn">テキストをコピー</button>
+        </div>
+      </div>
+
+      <div class="result-box">
+        <div class="label">入力された数式</div>
+        <div id="mathInputDisplay" class="math-display" style="min-height: 40px;">
+          <!-- MathJax Rendered Input -->
+        </div>
+      </div>
+
+      <div class="result-box">
+        <div class="label">式に含まれる変数</div>
+        <div id="variablesList" class="chips">
+          <!-- Variables Chips -->
+        </div>
+      </div>
+      
+    </div>
+
+    <!-- 履歴エリア -->
+    <div class="card" style="display:flex;flex-direction:column; margin-top:18px; padding:16px; box-shadow:none; border:1px solid #e6e9ee;">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <div class="label" style="margin:0;">計算履歴</div>
+        <button id="clearHistoryBtn" class="btn ghost" style="padding:6px 12px; font-size:12px;">履歴クリア</button>
+      </div>
+      <div id="historyList" class="history-list"></div>
+    </div>
+
+    <div id="message" class="footer-note"></div>
+  </div>
+</div>
+
+<script>
+// 全角英数・記号を半角に変換するユーティリティ
+const toHalfWidth = (str) => {
+  return str.replace(/[！-～]/g, (ch) => String.fromCharCode(ch.charCodeAt(0) - 0xFEE0))
+            .replace(/　/g, ' ')
+            .replace(/×/g, '*')
+            .replace(/÷/g, '/');
+};
+
+// 入力のサニタイズ（全角半角変換など）
+const sanitizeInput = (raw) => {
+  return toHalfWidth(raw).trim();
+};
+
+// LocalStorageのキー
+const HISTORY_KEY = 'math_tool_history_v1';
+
+// DOM要素の取得
+const inputEl = document.getElementById('inputExpr');
+const expandBtn = document.getElementById('expandBtn');
+const factorBtn = document.getElementById('factorBtn');
+const clearBtn = document.getElementById('clearBtn');
+const resultsEl = document.getElementById('results');
+const actionLabelEl = document.getElementById('actionLabel');
+const mathResultDisplayEl = document.getElementById('mathResultDisplay');
+const mathResultPlainEl = document.getElementById('mathResultPlain');
+const copyResultBtn = document.getElementById('copyResultBtn');
+const mathInputDisplayEl = document.getElementById('mathInputDisplay');
+const variablesListEl = document.getElementById('variablesList');
+const historyListEl = document.getElementById('historyList');
+const clearHistoryBtn = document.getElementById('clearHistoryBtn');
+const messageEl = document.getElementById('message');
+
+// 現在の結果を保持
+let currentResultPlain = "";
+
+// メッセージ表示関数
+const showMessage = (txt, isError = false) => {
+  messageEl.textContent = txt || '';
+  messageEl.className = txt ? (isError ? 'alert' : 'footer-note') : 'footer-note';
+  if(!txt) messageEl.style.display = 'none';
+  else messageEl.style.display = 'block';
+};
+
+// MathJaxを使用して数式を描画する関数
+const renderMath = (latexStr, containerEl) => {
+  // LaTeX形式で括って挿入 (ディスプレイ数式モード)
+  containerEl.innerHTML = `\\[ ${latexStr} \\]`;
+  if (window.MathJax && window.MathJax.typesetPromise) {
+    // 描画の更新を要求
+    MathJax.typesetPromise([containerEl]).catch(err => {
+      console.error('MathJax rendering error:', err);
+    });
+  }
+};
+
+// 展開・因数分解の実行関数
+const calculateMath = (actionType) => {
+  showMessage('');
+  const rawInput = inputEl.value;
+  const expr = sanitizeInput(rawInput);
+  
+  if (!expr) {
+    showMessage('数式を入力してください。', true);
+    return;
+  }
+
+  try {
+    let resultObj;
+    let actionName = "";
+    
+    // Nerdamerで計算処理
+    if (actionType === 'expand') {
+      resultObj = nerdamer(`expand(${expr})`);
+      actionName = "展開";
+    } else if (actionType === 'factor') {
+      resultObj = nerdamer(`factor(${expr})`);
+      actionName = "因数分解";
+    }
+
+    // 不要な乗算記号（*）を省略し、残りを × に変換する関数
+    const formatPlain = (s) => {
+      return s.replace(/([0-9a-zA-Z])\s*\*\s*(?=[a-zA-Z\(])/g, '$1')
+              .replace(/\)\s*\*\s*(?=[a-zA-Z0-9\(])/g, ')')
+              .replace(/\*/g, '×');
+    };
+
+    // 不要な乗算記号（\cdot）を省略し、残りを \times に変換する関数 (MathJax/TeX用)
+    const formatTex = (s) => {
+      return s.replace(/([0-9a-zA-Z])\s*\\cdot\s*(?=[a-zA-Z])/g, '$1')
+              .replace(/([0-9a-zA-Z])\s*\\cdot\s*(?=\\left\()/g, '$1')
+              .replace(/\\right\)\s*\\cdot\s*(?=[a-zA-Z0-9])/g, '\\right)')
+              .replace(/\\right\)\s*\\cdot\s*(?=\\left\()/g, '\\right)')
+              .replace(/\\cdot/g, '\\times');
+    };
+
+    // 結果文字列の取得
+    const resultPlain = formatPlain(resultObj.toString());
+    const resultTex = formatTex(resultObj.toTeX());
+    
+    // 入力式の解析と変数抽出
+    const inputObj = nerdamer(expr);
+    const inputTex = formatTex(inputObj.toTeX());
+    const variables = inputObj.variables();
+
+    // DOMの更新
+    resultsEl.style.display = 'grid';
+    actionLabelEl.textContent = actionName;
+    
+    // MathJaxで綺麗に表示
+    renderMath(resultTex, mathResultDisplayEl);
+    renderMath(inputTex, mathInputDisplayEl);
+    
+    // コピー用のプレーンテキスト表示
+    currentResultPlain = resultPlain;
+    mathResultPlainEl.textContent = resultPlain;
+
+    // 変数リストの更新
+    variablesListEl.innerHTML = '';
+    if (variables && variables.length > 0) {
+      variables.forEach(v => {
+        const chip = document.createElement('div');
+        chip.className = 'chip';
+        chip.textContent = v;
+        variablesListEl.appendChild(chip);
+      });
+    } else {
+      variablesListEl.innerHTML = '<span class="small">変数なし</span>';
+    }
+
+    // 履歴に保存
+    saveHistory(expr, actionType, resultPlain);
+    renderHistory();
+    showMessage('計算完了');
+
+  } catch (error) {
+    console.error(error);
+    showMessage('数式の解析に失敗しました。括弧の対応や演算子の連続など、正しい数式か確認してください。', true);
+    resultsEl.style.display = 'none';
+  }
+};
+
+// 履歴保存関数
+const saveHistory = (expr, action, result) => {
+  const raw = localStorage.getItem(HISTORY_KEY);
+  const arr = raw ? JSON.parse(raw) : [];
+  
+  // 重複チェック (直近と同じ処理なら保存しない)
+  if (arr.length > 0 && arr[0].expr === expr && arr[0].action === action) {
+    return;
+  }
+
+  arr.unshift({ ts: Date.now(), expr, action, result });
+  while (arr.length > 20) arr.pop(); // 最大20件保存
+  localStorage.setItem(HISTORY_KEY, JSON.stringify(arr));
+};
+
+// 履歴読み込み関数
+const loadHistory = () => {
+  const raw = localStorage.getItem(HISTORY_KEY);
+  return raw ? JSON.parse(raw) : [];
+};
+
+// 履歴の描画関数
+const renderHistory = () => {
+  historyListEl.innerHTML = '';
+  const arr = loadHistory();
+  if (arr.length === 0) { 
+    historyListEl.innerHTML = '<div class="small" style="text-align:center; padding:10px 0;">履歴はありません</div>'; 
+    return; 
+  }
+
+  for (const it of arr) {
+    const item = document.createElement('div');
+    item.className = 'history-item';
+    
+    const actionText = it.action === 'expand' ? '展開' : '因数分解';
+    const badgeClass = it.action === 'expand' ? 'badge-expand' : 'badge-factor';
+
+    const left = document.createElement('div');
+    left.innerHTML = `
+      <div style="margin-bottom:6px;">
+        <span class="history-badge ${badgeClass}">${actionText}</span>
+        <span class="history-expr">${it.expr}</span>
+      </div>
+      <div class="small" style="color:#555;">結果: <span style="font-family:monospace; font-weight:bold;">${it.result}</span></div>
+    `;
+
+    const right = document.createElement('div');
+    right.style.display = 'flex';
+    right.style.gap = '8px';
+
+    const reuseBtn = document.createElement('button');
+    reuseBtn.className = 'btn ghost';
+    reuseBtn.style.padding = '6px 12px';
+    reuseBtn.style.fontSize = '12px';
+    reuseBtn.textContent = '入力を復元';
+    reuseBtn.onclick = () => { 
+      inputEl.value = it.expr; 
+      inputEl.focus();
+      window.scrollTo({top: 0, behavior: 'smooth'});
+    };
+
+    const delBtn = document.createElement('button');
+    delBtn.className = 'copy-btn';
+    delBtn.style.color = '#dc3545';
+    delBtn.style.background = '#fff';
+    delBtn.style.border = '1px solid #ffcccc';
+    delBtn.textContent = '削除';
+    delBtn.onclick = () => {
+      const newArr = loadHistory().filter(x => x.ts !== it.ts);
+      localStorage.setItem(HISTORY_KEY, JSON.stringify(newArr));
+      renderHistory();
+    };
+
+    right.appendChild(reuseBtn);
+    right.appendChild(delBtn);
+    item.appendChild(left);
+    item.appendChild(right);
+    historyListEl.appendChild(item);
+  }
+};
+
+// イベントリスナーの登録
+expandBtn.addEventListener('click', () => calculateMath('expand'));
+factorBtn.addEventListener('click', () => calculateMath('factor'));
+
+clearBtn.addEventListener('click', () => { 
+  inputEl.value = ''; 
+  resultsEl.style.display = 'none'; 
+  showMessage('入力をクリアしました'); 
+  inputEl.focus();
+});
+
+clearHistoryBtn.addEventListener('click', () => {
+  localStorage.removeItem(HISTORY_KEY);
+  renderHistory();
+  showMessage('履歴をクリアしました');
+});
+
+// コピー機能
+copyResultBtn.addEventListener('click', async () => {
+  if (!currentResultPlain) return;
+  try {
+    await navigator.clipboard.writeText(currentResultPlain);
+    const originalText = copyResultBtn.textContent;
+    copyResultBtn.textContent = 'コピーしました!';
+    copyResultBtn.style.background = '#d4edda';
+    copyResultBtn.style.color = '#155724';
+    setTimeout(() => {
+      copyResultBtn.textContent = originalText;
+      copyResultBtn.style.background = '';
+      copyResultBtn.style.color = '';
+    }, 2000);
+  } catch (e) {
+    // iframe制約回避のためのフォールバック
+    const textArea = document.createElement("textarea");
+    textArea.value = currentResultPlain;
+    document.body.appendChild(textArea);
+    textArea.focus();
+    textArea.select();
+    try {
+      document.execCommand('copy');
+      copyResultBtn.textContent = 'コピーしました!';
+      setTimeout(() => copyResultBtn.textContent = 'テキストをコピー', 2000);
+    } catch (err) {
+      showMessage('コピーに失敗しました', true);
+    }
+    document.body.removeChild(textArea);
+  }
+});
+
+// 全角入力時に自動で半角にする処理
+inputEl.addEventListener('input', (e) => {
+  const pos = inputEl.selectionStart;
+  const before = inputEl.value;
+  const converted = toHalfWidth(before);
+  if (converted !== before) {
+    inputEl.value = converted;
+    inputEl.setSelectionRange(pos, pos);
+  }
+});
+
+// Enterキーで展開を実行（デフォルトアクション）
+inputEl.addEventListener('keypress', (e) => {
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    calculateMath('expand');
+  }
+});
+
+// 初期表示時の履歴レンダリング
+renderHistory();
+showMessage(''); // 初期化
+</script>
+</body>
+</html>
